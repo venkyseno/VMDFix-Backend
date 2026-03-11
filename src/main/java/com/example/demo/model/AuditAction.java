@@ -1,0 +1,17 @@
+package com.example.demo.model;
+
+public enum AuditAction {
+
+    CASE_CREATED,
+    CASE_ASSIGNED,
+    CASE_STARTED,
+    CASE_CLOSED,
+
+    CASHBACK_CREDITED,
+
+    WITHDRAWAL_REQUESTED,
+    WITHDRAWAL_APPROVED,
+    WITHDRAWAL_REJECTED,
+    WITHDRAWAL_PAID,
+    WALLET_DEBITED
+}
