@@ -4,11 +4,19 @@ import com.example.demo.api.SuccessResponse;
 import com.example.demo.dto.CloseCaseRequest;
 import com.example.demo.dto.CreateCaseRequest;
 import com.example.demo.model.ServiceCase;
+import com.example.demo.model.User;
+import com.example.demo.repository.UserRepository;
 import com.example.demo.service.ServiceCaseService;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/cases")
@@ -17,6 +25,50 @@ import java.util.List;
 public class ServiceCaseController {
 
     private final ServiceCaseService service;
+    private final UserRepository userRepository;
+
+    /** DTO that enriches ServiceCase with worker info for the Orders page */
+    @Getter
+    @Setter
+    public static class EnrichedCase {
+        private Long id;
+        private Long serviceId;
+        private String serviceName;
+        private String serviceImageUrl;
+        private String description;
+        private String customerPhone;
+        private Long assistedByUserId;
+        private Long workerId;
+        private String workerName;
+        private String workerPhone;
+        private String attachmentUrl;
+        private String status;
+        private BigDecimal serviceAmount;
+        private LocalDateTime createdAt;
+        private String bookingAddress;
+
+        public static EnrichedCase from(ServiceCase sc, User worker) {
+            EnrichedCase e = new EnrichedCase();
+            e.id = sc.getId();
+            e.serviceId = sc.getServiceId();
+            e.serviceName = sc.getServiceName();
+            e.serviceImageUrl = sc.getServiceImageUrl();
+            e.description = sc.getDescription();
+            e.customerPhone = sc.getCustomerPhone();
+            e.assistedByUserId = sc.getAssistedByUserId();
+            e.workerId = sc.getWorkerId();
+            e.attachmentUrl = sc.getAttachmentUrl();
+            e.status = sc.getStatus() != null ? sc.getStatus().name() : "CREATED";
+            e.serviceAmount = sc.getServiceAmount();
+            e.createdAt = sc.getCreatedAt();
+            e.bookingAddress = sc.getBookingAddress();
+            if (worker != null) {
+                e.workerName = worker.getName();
+                e.workerPhone = worker.getMobile();
+            }
+            return e;
+        }
+    }
 
     @PostMapping
     public SuccessResponse<ServiceCase> createCase(@RequestBody CreateCaseRequest request) {
@@ -29,13 +81,20 @@ public class ServiceCaseController {
     }
 
     @GetMapping("/{id}")
-    public SuccessResponse<ServiceCase> getCase(@PathVariable Long id) {
-        return SuccessResponse.ok(service.getCaseById(id));
+    public SuccessResponse<EnrichedCase> getCase(@PathVariable Long id) {
+        ServiceCase sc = service.getCaseById(id);
+        User worker = sc.getWorkerId() != null ? userRepository.findById(sc.getWorkerId()).orElse(null) : null;
+        return SuccessResponse.ok(EnrichedCase.from(sc, worker));
     }
 
     @GetMapping("/user/{userId}")
-    public SuccessResponse<List<ServiceCase>> getCasesByUser(@PathVariable Long userId) {
-        return SuccessResponse.ok(service.getCasesByUser(userId));
+    public SuccessResponse<List<EnrichedCase>> getCasesByUser(@PathVariable Long userId) {
+        List<ServiceCase> cases = service.getCasesByUser(userId);
+        List<EnrichedCase> enriched = cases.stream().map(sc -> {
+            User worker = sc.getWorkerId() != null ? userRepository.findById(sc.getWorkerId()).orElse(null) : null;
+            return EnrichedCase.from(sc, worker);
+        }).collect(Collectors.toList());
+        return SuccessResponse.ok(enriched);
     }
 
     @PostMapping("/{id}/close")

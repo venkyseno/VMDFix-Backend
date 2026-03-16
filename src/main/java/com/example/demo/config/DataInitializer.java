@@ -37,7 +37,7 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedUsers() {
-        createUserIfAbsent("9876543210", "Venkatesh", "password1234", UserRole.USER);
+        createUserIfAbsent("9876543210", "Venkatesh", "password123", UserRole.USER);
         createUserIfAbsent("admin", "Admin", "admin123", UserRole.ADMIN);
         createUserIfAbsent("worker1", "Worker One", "worker123", UserRole.WORKER);
     }

@@ -21,6 +21,12 @@ public class ServiceCase {
 
     private Long serviceId;
 
+    // Dynamically resolved service name (stored at booking time)
+    private String serviceName;
+
+    // Service image URL (stored at booking time)
+    private String serviceImageUrl;
+
     @Column(length = 500)
     private String description;
 
@@ -42,4 +48,7 @@ public class ServiceCase {
     private BigDecimal serviceAmount;
 
     private LocalDateTime createdAt;
+
+    // Booking address (from user's primary address)
+    private String bookingAddress;
 }
