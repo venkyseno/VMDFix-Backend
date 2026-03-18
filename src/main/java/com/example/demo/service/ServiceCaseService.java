@@ -7,6 +7,8 @@ import com.example.demo.model.*;
 import com.example.demo.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import java.util.HashMap;
+import java.util.Map;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -22,6 +24,7 @@ public class ServiceCaseService {
     private final OurServiceCardRepository ourServiceCardRepository;
     private final QuickServiceRepository quickServiceRepository;
     private final AddressRepository addressRepository;
+    private final NotificationService notificationService;
 
     /**
      * Resolve service name dynamically from DB (no hardcoded IDs).
@@ -83,6 +86,13 @@ public class ServiceCaseService {
 
         ServiceCase saved = repository.save(serviceCase);
         auditService.log(AuditAction.CASE_CREATED, request.getAssistedByUserId(), saved.getId());
+        // Fire ORDER_CREATED notification
+        try {
+            Map<String, String> vars = new HashMap<>();
+            vars.put("serviceName", saved.getServiceName() != null ? saved.getServiceName() : "Service");
+            vars.put("orderId", String.valueOf(saved.getId()));
+            notificationService.handleEvent("ORDER_CREATED", saved.getAssistedByUserId(), vars);
+        } catch (Exception ignored) {}
         return saved;
     }
 
