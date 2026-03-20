@@ -14,8 +14,10 @@ public class CreateCaseRequest {
     private String customerPhone;
     private Long assistedByUserId;
     private String attachmentUrl;
-    // Optional: frontend can pass the service name directly
+    // Frontend passes the exact name and image it displayed — always trust these
     private String serviceName;
     private String serviceImageUrl;
     private String bookingAddress;
+    // "our" or "quick" — tells backend which table to look up if name is missing
+    private String serviceType;
 }

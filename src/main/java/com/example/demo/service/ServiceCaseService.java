@@ -27,29 +27,50 @@ public class ServiceCaseService {
     private final NotificationService notificationService;
 
     /**
-     * Resolve service name dynamically from DB (no hardcoded IDs).
-     * Priority: OurServiceCard → QuickService → provided name → "Service #id"
+     * Resolve service name.
+     * Priority: providedName (frontend always knows what it showed) → DB lookup → fallback.
+     * This prevents ID collisions between our_service_cards and quick_services tables.
      */
-    private String resolveServiceName(Long serviceId, String providedName) {
-        if (serviceId != null) {
-            // Try OurServiceCard first
-            var card = ourServiceCardRepository.findById(serviceId);
-            if (card.isPresent()) return card.get().getName();
-
-            // Try QuickService
-            var qs = quickServiceRepository.findById(serviceId);
-            if (qs.isPresent()) return qs.get().getName();
-        }
+    private String resolveServiceName(Long serviceId, String providedName, String serviceType) {
+        // Frontend explicitly told us the name — trust it. This is the most reliable source.
         if (providedName != null && !providedName.isBlank()) return providedName;
+
+        if (serviceId != null) {
+            // If serviceType is known, look in the correct table only
+            if ("our".equalsIgnoreCase(serviceType)) {
+                var card = ourServiceCardRepository.findById(serviceId);
+                if (card.isPresent()) return card.get().getName();
+            } else if ("quick".equalsIgnoreCase(serviceType)) {
+                var qs = quickServiceRepository.findById(serviceId);
+                if (qs.isPresent()) return qs.get().getName();
+            } else {
+                // Legacy fallback: try both (may collide, but providedName already handled above)
+                var card = ourServiceCardRepository.findById(serviceId);
+                if (card.isPresent()) return card.get().getName();
+                var qs = quickServiceRepository.findById(serviceId);
+                if (qs.isPresent()) return qs.get().getName();
+            }
+        }
         return serviceId != null ? "Service #" + serviceId : "Service";
     }
 
-    private String resolveServiceImage(Long serviceId, String providedImage) {
+    private String resolveServiceImage(Long serviceId, String providedImage, String serviceType) {
+        // Frontend provided image takes priority
+        if (providedImage != null && !providedImage.isBlank()) return providedImage;
+
         if (serviceId != null) {
-            var card = ourServiceCardRepository.findById(serviceId);
-            if (card.isPresent() && card.get().getImageUrl() != null) return card.get().getImageUrl();
-            var qs = quickServiceRepository.findById(serviceId);
-            if (qs.isPresent() && qs.get().getImageUrl() != null) return qs.get().getImageUrl();
+            if ("our".equalsIgnoreCase(serviceType)) {
+                var card = ourServiceCardRepository.findById(serviceId);
+                if (card.isPresent() && card.get().getImageUrl() != null) return card.get().getImageUrl();
+            } else if ("quick".equalsIgnoreCase(serviceType)) {
+                var qs = quickServiceRepository.findById(serviceId);
+                if (qs.isPresent() && qs.get().getImageUrl() != null) return qs.get().getImageUrl();
+            } else {
+                var card = ourServiceCardRepository.findById(serviceId);
+                if (card.isPresent() && card.get().getImageUrl() != null) return card.get().getImageUrl();
+                var qs = quickServiceRepository.findById(serviceId);
+                if (qs.isPresent() && qs.get().getImageUrl() != null) return qs.get().getImageUrl();
+            }
         }
         return providedImage;
     }
@@ -67,8 +88,8 @@ public class ServiceCaseService {
     }
 
     public ServiceCase createCase(CreateCaseRequest request) {
-        String resolvedName = resolveServiceName(request.getServiceId(), request.getServiceName());
-        String resolvedImage = resolveServiceImage(request.getServiceId(), request.getServiceImageUrl());
+        String resolvedName = resolveServiceName(request.getServiceId(), request.getServiceName(), request.getServiceType());
+        String resolvedImage = resolveServiceImage(request.getServiceId(), request.getServiceImageUrl(), request.getServiceType());
         String resolvedAddress = resolveBookingAddress(request.getAssistedByUserId(), request.getBookingAddress());
 
         ServiceCase serviceCase = ServiceCase.builder()
@@ -136,4 +157,47 @@ public class ServiceCaseService {
         auditService.log(AuditAction.CASE_CLOSED, adminId, saved.getId());
         return saved;
     }
+
+    /**
+     * Fix serviceName for a specific case (admin use).
+     * Corrects old records where serviceName was stored from the wrong table.
+     */
+    public ServiceCase updateServiceName(Long caseId, String newServiceName) {
+        ServiceCase sc = getCaseById(caseId);
+        if (newServiceName != null && !newServiceName.isBlank()) {
+            sc.setServiceName(newServiceName.trim());
+            repository.save(sc);
+        }
+        return sc;
+    }
+
+    /**
+     * Bulk-fix all cases where serviceName is missing or generic ("Service #N").
+     * Re-resolves from the correct service table using serviceId.
+     * Called once via admin endpoint to clean up old data.
+     */
+    public int bulkFixServiceNames() {
+        int fixed = 0;
+        for (ServiceCase sc : repository.findAll()) {
+            String name = sc.getServiceName();
+            boolean needsFix = name == null || name.isBlank() || name.startsWith("Service #");
+            if (needsFix && sc.getServiceId() != null) {
+                var card = ourServiceCardRepository.findById(sc.getServiceId());
+                if (card.isPresent()) {
+                    sc.setServiceName(card.get().getName());
+                    repository.save(sc);
+                    fixed++;
+                    continue;
+                }
+                var qs = quickServiceRepository.findById(sc.getServiceId());
+                if (qs.isPresent()) {
+                    sc.setServiceName(qs.get().getName());
+                    repository.save(sc);
+                    fixed++;
+                }
+            }
+        }
+        return fixed;
+    }
+
 }

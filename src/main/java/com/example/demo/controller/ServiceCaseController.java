@@ -105,4 +105,27 @@ public class ServiceCaseController {
     ) {
         return SuccessResponse.ok(service.closeCase(id, request, userId));
     }
+
+    /**
+     * Admin: Fix serviceName for a specific order.
+     * POST /api/cases/{id}/fix-name?name=HouseClean
+     */
+    @PostMapping("/{id}/fix-name")
+    public SuccessResponse<ServiceCase> fixServiceName(
+            @PathVariable Long id,
+            @RequestParam String name) {
+        return SuccessResponse.ok(service.updateServiceName(id, name));
+    }
+
+    /**
+     * Admin: Bulk-fix all orders with missing/wrong serviceName.
+     * POST /api/cases/bulk-fix-names
+     * Returns count of records fixed.
+     */
+    @PostMapping("/bulk-fix-names")
+    public SuccessResponse<Map<String, Object>> bulkFixNames() {
+        int fixed = service.bulkFixServiceNames();
+        return SuccessResponse.ok(Map.of("fixed", fixed, "message", "Fixed " + fixed + " records"));
+    }
+
 }
